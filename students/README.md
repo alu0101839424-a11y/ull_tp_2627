@@ -22,7 +22,9 @@ Now, after the second lecture, your directory tree should look like:
     ||- course_exercise_2
     |||- README.md
 
-5. Edit this README.md file to include your name and the name of the directory you created under the "Students" section below. 6. Stage all the README.md files using `git add` and commit the changes using `git commit`. 7. Push the changes to GitHub using `git push`. 8. In GitHub, open a pull request telling me you have reached this far.
+5. Edit this README.md file to include your name and the name of the directory you created under the "Students" section below.
+6. Stage all the README.md files using `git add` and commit the changes using `git commit`.
+7. Push the changes to GitHub using `git push`. 8. In GitHub, open a pull request telling me you have reached this far.
 
 ## Students
 
