@@ -1,11 +1,17 @@
 FC = gfortran
 FFLAGS = -Wall -fcheck=all -O2
+OMPFLAGS = -fopenmp
 
 OBJS = kinds.o geometry.o particle.o
 
-#target 
+#target
+all: ex1 ex1_omp
+
 ex1: $(OBJS) ex1.f90
 	$(FC) $(FFLAGS) -o $@ ex1.f90 $(OBJS)
+
+ex1_omp: $(OBJS) ex1.f90
+	$(FC) $(FFLAGS) $(OMPFLAGS) -o $@ ex1.f90 $(OBJS)
 
 #dependencies
 kinds.o: kinds.f90
@@ -19,4 +25,4 @@ particle.o: particle.f90 geometry.o kinds.o
 
 #cleanup
 clean:
-	rm -f *.o *.mod ex1 output.dat
+	rm -f *.o *.mod ex1 ex1_omp output.dat

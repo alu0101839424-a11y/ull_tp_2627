@@ -47,25 +47,24 @@ program ex1
   out_every = max(1, nint(dt_out / dt))
 
   ! initial accelerations calculation
+  ! Calculate initial accelerations (Lock-Free Full Matrix)
+  !$omp parallel do
   do i = 1, n
      a(i) = vector3d(0.0_dp, 0.0_dp, 0.0_dp)
   end do
   
+  !$omp parallel do private(j, rji, r2, r3) schedule(dynamic)
   do i = 1, n
-     do j = i+1, n
-        ! this automatically uses the function subpp thanks to the operator -
+     do j = 1, n
+        if (i == j) cycle
+        
         rji = bodies(j)%p - bodies(i)%p
         r2 = rji%x**2 + rji%y**2 + rji%z**2
         r3 = r2 * sqrt(r2)
         
-        ! we have implemented component-wise vector addition to avoid needing sumvv/subvv that we have not defined
         a(i)%x = a(i)%x + rji%x * (bodies(j)%m / r3)
         a(i)%y = a(i)%y + rji%y * (bodies(j)%m / r3)
         a(i)%z = a(i)%z + rji%z * (bodies(j)%m / r3)
-        
-        a(j)%x = a(j)%x - rji%x * (bodies(i)%m / r3)
-        a(j)%y = a(j)%y - rji%y * (bodies(i)%m / r3)
-        a(j)%z = a(j)%z - rji%z * (bodies(i)%m / r3)
      end do
   end do
 
@@ -83,13 +82,17 @@ program ex1
         bodies(i)%p = bodies(i)%p + bodies(i)%v * dt
      end do
 
-     ! force, accelerations from new positions
+     ! 3.force, accelerations from new positions
+     !$omp parallel do
      do i = 1, n
         a(i) = vector3d(0.0_dp, 0.0_dp, 0.0_dp)
      end do
      
+     !$omp parallel do private(j, rji, r2, r3) schedule(dynamic)
      do i = 1, n
-        do j = i+1, n
+        do j = 1, n
+           if (i == j) cycle
+           
            rji = bodies(j)%p - bodies(i)%p
            r2 = rji%x**2 + rji%y**2 + rji%z**2
            r3 = r2 * sqrt(r2)
@@ -97,14 +100,10 @@ program ex1
            a(i)%x = a(i)%x + rji%x * (bodies(j)%m / r3)
            a(i)%y = a(i)%y + rji%y * (bodies(j)%m / r3)
            a(i)%z = a(i)%z + rji%z * (bodies(j)%m / r3)
-           
-           a(j)%x = a(j)%x - rji%x * (bodies(i)%m / r3)
-           a(j)%y = a(j)%y - rji%y * (bodies(i)%m / r3)
-           a(j)%z = a(j)%z - rji%z * (bodies(i)%m / r3)
         end do
      end do
 
-     ! kick again component-wise
+     ! 4.kick again component-wise
      do i = 1, n
         bodies(i)%v%x = bodies(i)%v%x + a(i)%x * (dt / 2.0_dp)
         bodies(i)%v%y = bodies(i)%v%y + a(i)%y * (dt / 2.0_dp)
