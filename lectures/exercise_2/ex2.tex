@@ -1,0 +1,159 @@
+\input{../common}
+\subtitle{Course exercise 2: distributed Barnes--Hut simulation with MPI}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\section{Exercise 2}
+
+\begin{frame}
+  \frametitle{Exercise 2: Barnes--Hut simulation with MPI}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{itemize}
+        \item The direct sum of Exercise 1 takes a time proportional to $N^2$.
+        \item The Barnes--Hut algorithm (Lecture 11) treats a distant group of particles as a single point mass at its centre of mass. It takes a time proportional to $N \log N$.
+        \item In this exercise, you turn a serial Barnes--Hut code into a modular program, and distribute the calculation over several processes with MPI.
+      \end{itemize}
+    \end{column}
+
+    \begin{column}{0.5\textwidth}
+      Starting code: \texttt{lectures/exercise\_2/barnes\_hut.f90}
+      \begin{itemize}
+        \item A serial program in one file.
+        \item Reads the same input format as Exercise 1 from standard input: \mbox{\texttt{./barnes\_hut < input.dat}}.
+        \item Create larger inputs with \texttt{exercise\_1/random\_sphere.f90}.
+        \item Two parameters: the opening angle \mbox{\texttt{theta = 0.5}} and the softening length \mbox{\texttt{eps = 0.01}}.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+
+\begin{frame}[fragile]
+  \frametitle{Exercise 2: how the starting code works}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      The particles move with the leapfrog method, as in Exercise 1. After every drift, the accelerations are computed in four steps:
+      \begin{enumerate}
+        \item Put all the particles into an octree. A node that would hold two particles is divided into eight children.
+        \item Compute the total mass and the centre of mass of every node, from the leaves up.
+        \item For each particle, walk down the tree from the root. A node of size $s$ at distance $d$ is treated as a point mass if $s / d < \theta$. Otherwise, visit its children.
+        \item Delete the tree.
+      \end{enumerate}
+    \end{column}
+
+    \begin{column}{0.48\textwidth}
+      \begin{lstlisting}
+type :: node
+  real(dp) :: centre(3)
+  real(dp) :: size
+  integer :: n_particles = 0
+  integer :: particle = 0
+  real(dp) :: mass = 0.0_dp
+  real(dp) :: com(3) = 0.0_dp
+  type(node), pointer :: parent => null()
+  type(node), pointer :: &
+      children(:,:,:) => null()
+end type node
+      \end{lstlisting}
+      \footnotesize
+      \texttt{particle} is the index of the particle in a leaf, and \texttt{com} is the centre of mass. A leaf has no children.
+
+      \normalsize
+      The softened acceleration $m \mathbf{r} / (|\mathbf{r}|^2 + \epsilon^2)^{3/2}$ avoids huge accelerations in close encounters.
+    \end{column}
+  \end{columns}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Exercise 2: the program}
+  \begin{enumerate}
+    \item Write a makefile for the project.
+    \item Move the \texttt{node} type and the tree procedures into a module \texttt{barnes\_hut} in the file \texttt{barnes\_hut.f90}, and the main program into the file \texttt{ex2.f90}.
+    \item Change the code to use the \texttt{geometry} and \texttt{particle} modules of Exercise 1, and store the particles in an array of \texttt{particle3d}.
+    \item Read the simulation setup from a file whose name is given as a command-line argument, and write the simulation data into \texttt{output.dat} in the same format as in Exercise 1.
+    \item Check your program against your Exercise 1 program. With $\theta = 0$ and $\epsilon = 0$, both compute the same accelerations, so a short run with the same input must give the same positions to many decimal places.
+  \end{enumerate}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Exercise 2: MPI}
+  \begin{enumerate}
+    \setcounter{enumi}{5}
+    \item Write a distributed version of the program with MPI in the file \texttt{ex2\_mpi.f90}. It uses the same modules. Use this strategy:
+  \end{enumerate}
+  \begin{block}{Every rank builds the whole tree}
+    \begin{itemize}
+      \item Every rank reads the input and keeps all the particles. The particles are divided into blocks of consecutive particles, one block for each rank.
+      \item In every step, each rank
+        \begin{enumerate}
+          \item kicks and drifts the particles of its own block,
+          \item gathers the new positions of all the particles from all the ranks with \texttt{MPI\_Allgatherv},
+          \item builds the whole tree, and computes the accelerations of its own particles only,
+          \item kicks its own particles.
+        \end{enumerate}
+      \item Only rank 0 writes \texttt{output.dat}.
+    \end{itemize}
+  \end{block}
+  \textbf{Hints:} $N$ need not be divisible by the number of ranks, so the blocks can differ in size: \texttt{MPI\_Allgatherv} takes arrays of counts and displacements. Copy the positions into a \texttt{real(dp)} array of shape \texttt{(3, n)} before gathering them.
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Exercise 2: timing}
+  \begin{enumerate}
+    \setcounter{enumi}{6}
+    \item Measure the run times. Create the inputs with \texttt{random\_sphere.f90} with a seed, run 10 steps, and set \texttt{dt\_out} equal to \texttt{t\_end}.
+      \begin{itemize}
+        \item Compare your Exercise 1 program (one thread) with the serial Barnes--Hut program for $N$ = 1000, 2000, 5000, and 10\,000. For which $N$ does Barnes--Hut become faster?
+        \item Run the MPI program with 1, 2, 4, and 8 ranks for $N$ = 10\,000 and 100\,000. Compute the speed-ups. Why are they smaller than the number of ranks?
+      \end{itemize}
+    \item Write a \texttt{README.md} that explains how the code works, how to compile and run it, and the results of the timing study (in a table or a figure).
+  \end{enumerate}
+
+  \vspace*{2mm}
+  \textbf{Bonus:} parallelise the walk of the tree with OpenMP, in the serial or in the MPI program. Each particle's acceleration is written by one thread only, so there is no race condition, but the particles need different amounts of work. Compare the schedules \texttt{static} and \texttt{dynamic}.
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Exercise 2: submission}
+  \begin{enumerate}
+    \setcounter{enumi}{8}
+    \item Create a pull request (PR) with your code, and add all the course participants as reviewers.
+    \item Review the code in the other students' PRs, and write at least one comment on each.
+    \item (Optional) Revise your code based on the comments you have received.
+    \item In the PR, tag the teacher and say that you have finished the exercise.
+  \end{enumerate}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Exercise 2: scoring}
+  \textbf{Scoring} is based on
+  \begin{itemize}
+    \item Code (80\%)
+      \begin{enumerate}
+        \item Functionality: the serial and the MPI programs work as described.
+        \item Understandability: the code is clear to read and logical.
+        \item Comments: all the functionality in the modules and the programs is documented with comments.
+        \item Use of guidelines: the code uses the module, type, and file names exactly as written in the exercise.
+        \item Timing study: the measurements are complete and explained.
+      \end{enumerate}
+    \item Collaboration (20\%): GitHub PRs, PR comments, and participation.
+  \end{itemize}
+
+  \textbf{Bonus points} for the OpenMP task, anything else beyond what has been taught in class, frequent commits, and interaction. If in doubt, ask!
+
+  \vspace*{2mm}
+  \textbf{Notes:} Save all the source files in \texttt{students/<initials>/course\_exercise\_2}. All the real variables must be 64-bit. Compile the MPI program with \texttt{mpif90} and run it with \mbox{\texttt{mpirun -np 4 ./ex2\_mpi input.dat}}.
+\end{frame}
+
+
+\end{document}
